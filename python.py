@@ -110,3 +110,10 @@ if prompt := st.chat_input("Nhập câu hỏi của bạn ở đây..."):
                     error_message = f"Đã xảy ra lỗi không mong muốn: {e}"
                     st.error(error_message)
                     st.session_state.messages.append({"role": "assistant", "content": error_message})
+💡 Hướng Dẫn Tích Hợp và Chạy
+1. Cài đặt Thư viện
+Bạn cần cài đặt thư viện Streamlit và thư viện Python của Google GenAI.
+
+Bash
+
+pip install streamlit google-genai
