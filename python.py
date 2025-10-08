@@ -1,99 +1,92 @@
+Rất sẵn lòng! Với kinh nghiệm triển khai ứng dụng Streamlit, tôi sẽ cung cấp cho bạn một khung mã Python hoàn chỉnh để tích hợp chức năng chat với Gemini, sử dụng các phương pháp tốt nhất của Streamlit như st.session_state để quản lý lịch sử trò chuyện.
+
+Vì bạn muốn giữ nguyên các đoạn mã khác của mình, tôi sẽ trình bày phần mã dưới dạng các hàm hoặc khối logic có thể dễ dàng chèn vào tệp python.py của bạn.
+
+🛠️ Khung Chat Gemini Tích Hợp Streamlit
+Đây là đoạn mã cần thiết để tạo giao diện khung chat và tương tác với API Gemini. Bạn chỉ cần đảm bảo rằng thư viện google-genai đã được cài đặt (pip install google-genai).
+
+Bước 1: Khai báo và Thiết lập API Key
+Bạn nên đặt phần này ở đầu tệp python.py của mình, ngay sau các lệnh import khác.
+
+Python
+
 import streamlit as st
 from google import genai
 from google.genai.errors import APIError
 import os
-# --- Cấu hình ------------------------------------------------------------------
 
-# Tên biến môi trường chứa API Key. Bạn nên đặt khóa API trong biến môi trường
-# tên là GEMINI_API_KEY
-# Nếu không, bạn cần thay thế os.getenv("GEMINI_API_KEY") bằng khóa API của bạn
-# (nhưng KHÔNG NÊN LÀM VẬY trong ứng dụng thực tế).
-API_KEY = os.getenv("GEMINI_API_KEY")
-
-# Khởi tạo client Gemini.
+# --- Cấu hình Gemini ---
+# KHUYÊN DÙNG: Sử dụng st.secrets cho Streamlit Cloud hoặc os.getenv cho Local
 try:
-    if API_KEY:
+    # Ưu tiên đọc từ Streamlit secrets (khuyến nghị cho deploy)
+    API_KEY = st.secrets["GEMINI_API_KEY"]
+except (KeyError, AttributeError):
+    # Nếu không có secrets, đọc từ biến môi trường
+    API_KEY = os.getenv("GEMINI_API_KEY")
+
+if API_KEY:
+    try:
+        # Khởi tạo client Gemini
         client = genai.Client(api_key=API_KEY)
-    else:
-        st.error("Lỗi: Không tìm thấy khóa API. Vui lòng đặt khóa API của bạn vào biến môi trường 'GEMINI_API_KEY'.")
-        client = None # Vẫn thiết lập client thành None nếu lỗi
-except Exception as e:
-    st.error(f"Lỗi khi khởi tạo client Gemini: {e}")
+        MODEL_NAME = "gemini-2.5-flash" 
+    except Exception as e:
+        st.error(f"Lỗi khi khởi tạo Gemini client: {e}")
+        client = None
+else:
+    st.error("Lỗi: Không tìm thấy khóa API Gemini. Vui lòng đặt khóa vào biến môi trường 'GEMINI_API_KEY' hoặc tệp 'secrets.toml'.")
     client = None
+Bước 2: Hàm Chính Tạo Khung Chat
+Bạn có thể đặt toàn bộ logic chat này vào một hàm và gọi nó tại vị trí bạn muốn khung chat xuất hiện trong ứng dụng của mình.
 
-# Mô hình sử dụng
-MODEL_NAME = "gemini-2.5-flash" 
+Python
 
-# --- Giao diện và Logic Streamlit ----------------------------------------------
+def gemini_chat_interface():
+    """Tạo giao diện khung chat tương tác với Gemini."""
+    
+    # 1. Khởi tạo Lịch sử Chat
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+        # Thêm tin nhắn chào mừng ban đầu
+        st.session_state.messages.append({"role": "assistant", "content": "Xin chào! Tôi là Gemini. Bạn có câu hỏi gì cho tôi không?"})
 
-st.set_page_config(page_title="Streamlit Chatbot với Gemini 🤖", layout="centered")
-st.title("Chatbot Hỏi Đáp với Gemini 💬")
+    # 2. Hiển thị Lịch sử Chat
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
-# 1. Khởi tạo Lịch sử Chat
-# Sử dụng st.session_state để lưu trữ lịch sử cuộc trò chuyện
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-    # Thêm tin nhắn chào mừng ban đầu
-    st.session_state.messages.append({"role": "assistant", "content": "Xin chào! Tôi là Gemini. Bạn có câu hỏi gì cho tôi không?"})
+    # 3. Khung Chat Input (Đầu vào của người dùng)
+    if prompt := st.chat_input("Nhập câu hỏi của bạn ở đây..."):
+        
+        if not client:
+            st.error("Không thể gửi tin nhắn. Vui lòng kiểm tra cấu hình API Key.")
+            return
 
-# 2. Hiển thị Lịch sử Chat
-# Lặp qua tất cả tin nhắn đã lưu và hiển thị chúng
-for message in st.session_state.messages:
-    # Sử dụng st.chat_message để hiển thị tin nhắn với avatar phù hợp
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-
-# 3. Khung Chat Input (Đầu vào của người dùng)
-# st.chat_input sẽ luôn nằm ở cuối màn hình và trả về nội dung khi người dùng nhấn Enter
-if prompt := st.chat_input("Nhập câu hỏi của bạn ở đây..."):
-    if not client:
-        # Nếu client không được khởi tạo (do thiếu API Key), dừng lại
-        st.error("Không thể gửi tin nhắn. Vui lòng kiểm tra cấu hình API Key.")
-    else:
         # Thêm tin nhắn của người dùng vào lịch sử và hiển thị
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        # 4. Gọi API Gemini và Xử lý Phản hồi
+        # 4. Chuẩn bị và Gửi yêu cầu đến Gemini
         with st.chat_message("assistant"):
-            # st.spinner sẽ hiển thị thông báo "Đang chạy..." trong khi chờ phản hồi
             with st.spinner("Gemini đang suy nghĩ..."):
                 try:
-                    # Tạo một chuỗi lịch sử chat để truyền cho mô hình
-                    # Đây là cách đơn giản, nhưng bạn có thể dùng genai.Chat (client.chats.create)
-                    # cho các cuộc trò chuyện phức tạp hơn và có ngữ cảnh dài.
-                    
-                    # Tùy chọn 1: Sử dụng genai.Chat để quản lý lịch sử trò chuyện
-                    # (Khuyên dùng cho ứng dụng chat thực tế)
-                    
-                    # Chuyển đổi lịch sử st.session_state thành định dạng cần thiết
-                    history = []
-                    for message in st.session_state.messages:
-                        # Bỏ qua tin nhắn chào mừng ban đầu (vì nó không phải là phần của lịch sử chat API)
-                        if message.get("role") != "assistant" or message.get("content") != "Xin chào! Tôi là Gemini. Bạn có câu hỏi gì cho tôi không?":
-                            # Lược đồ API yêu cầu 'model' là 'assistant' và 'user' là 'user'
-                            api_role = "model" if message["role"] == "assistant" else "user"
-                            history.append({"role": api_role, "parts": [{"text": message["content"]}]})
-                    
-                    # Chỉ lấy lịch sử thực tế (bỏ tin nhắn chào mừng và tin nhắn cuối cùng của user để tránh trùng lặp)
-                    # Lấy tất cả tin nhắn *trừ* tin nhắn user vừa gửi
+                    # Chuyển đổi lịch sử Streamlit sang định dạng API cần thiết
                     chat_history_for_api = [
-                        {"role": "model" if msg["role"] == "assistant" else "user", "parts": [{"text": msg["content"]}]}
+                        {"role": "model" if msg["role"] == "assistant" else "user", 
+                         "parts": [{"text": msg["content"]}]}
+                        # Bỏ qua tin nhắn chào mừng và tin nhắn cuối cùng của user
                         for msg in st.session_state.messages[:-1]
-                        if msg["content"] != "Xin chào! Tôi là Gemini. Bạn có câu hỏi gì cho tôi không?" # Bỏ tin nhắn chào mừng
+                        if msg["content"] != "Xin chào! Tôi là Gemini. Bạn có câu hỏi gì cho tôi không?"
                     ]
-                    
-                    # Khởi tạo hoặc tiếp tục cuộc trò chuyện
+
+                    # Khởi tạo phiên chat (để Gemini duy trì ngữ cảnh)
                     chat = client.chats.create(
                         model=MODEL_NAME,
-                        history=chat_history_for_api # Truyền lịch sử trước đó
+                        history=chat_history_for_api
                     )
                     
                     # Gửi tin nhắn mới nhất
                     response = chat.send_message(prompt)
-                    
-                    # Lấy nội dung phản hồi
                     full_response = response.text
                     
                     # HIển thị phản hồi
@@ -110,10 +103,25 @@ if prompt := st.chat_input("Nhập câu hỏi của bạn ở đây..."):
                     error_message = f"Đã xảy ra lỗi không mong muốn: {e}"
                     st.error(error_message)
                     st.session_state.messages.append({"role": "assistant", "content": error_message})
-💡 Hướng Dẫn Tích Hợp và Chạy
-1. Cài đặt Thư viện
-Bạn cần cài đặt thư viện Streamlit và thư viện Python của Google GenAI.
 
-Bash
 
-pip install streamlit google-genai
+# --- LƯU Ý: Phần mã của bạn (ví dụ: các hàm, giao diện khác) ở đây ---
+# st.header("Ứng Dụng Chính Của Tôi") 
+# # ... đoạn code khác của bạn ...
+# st.write("Đây là nội dung trước khung chat.")
+
+
+# --- VỊ TRÍ GỌI HÀM CHAT ---
+# Gọi hàm này tại vị trí bạn muốn khung chat xuất hiện
+if __name__ == '__main__':
+    st.title("Ứng Dụng Của Tôi + Chatbot Gemini")
+    
+    # Giả sử đây là đoạn mã ban đầu của bạn
+    st.write("Dữ liệu và giao diện chính của ứng dụng bạn ở đây.")
+    # st.selectbox(...)
+    # st.dataframe(...)
+    
+    # Gọi hàm chat
+    st.divider() # Dùng để phân tách rõ ràng giao diện chính và khung chat
+    st.subheader("Trò chuyện với Gemini")
+    gemini_chat_interface()
